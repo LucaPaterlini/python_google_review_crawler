@@ -1,18 +1,3 @@
-import datetime
-import time
-import re
-from multiprocessing import Process, Pool
-
-import pandas as pd
-import selenium.common.exceptions
-from bs4 import BeautifulSoup
-from selenium import webdriver
-from selenium.webdriver.chrome.service import Service
-from selenium.webdriver.common.by import By
-from selenium.webdriver.support import expected_conditions as ec
-from selenium.webdriver.support.wait import WebDriverWait
-from emot.emo_unicode import UNICODE_EMOJI as UNICODE_EMO
-
 stores = {
     'BLUEWATER': 'https://www.google.com/maps/place/Marks+and+Spencer/@51.4384654,0.2744905,17z/data=!3m1!4b1!4m6!3m5!1s0x47d8b14fc5d6b913:0x39926dcb761dc966!8m2!3d51.4384654!4d0.2744905!16s%2Fg%2F11bzyx3mf8?authuser=0&hl=en',
     'KINGSTON': 'https://www.google.com/maps/place/Marks+and+Spencer/@51.4107238,-0.3058677,17z/data=!3m1!4b1!4m5!3m4!1s0x48760beabb2f481b:0x7dfd2f3412db0fc3!8m2!3d51.4107205!4d-0.303679?authuser=0&hl=en',
@@ -57,94 +42,9 @@ stores = {
     'ABERDEEN': 'https://www.google.com/maps/place/Marks+and+Spencer/data=!4m6!3m5!1s0x488411ea545356cd:0x4b21a0ace1c0087d!8m2!3d57.1548009!4d-2.1377847!16s%2Fg%2F11g0yk6wrb?authuser=0&hl=en&rclk=1'
 }
 
-float_regex = re.compile(r'\d+(?:\.\d+)?')
+import os
 
-
-def convert_emojis(text):
-    for emot in UNICODE_EMO:
-        text = text.replace(emot, "_".join(UNICODE_EMO[emot].replace(",", "").replace(":", "").split()))
-    return text
-
-def convert_timestring(timestring):
-    return dateparser.parse(timestring).strftime("%Y-%m-%d %H:%M")
-
-
-def page_preload(driver, url):
-    driver.get(url)
-    wait = WebDriverWait(driver, 10)
-    time.sleep(2)  # Let the user actually see something!
-    review_bt = wait.until(ec.element_to_be_clickable((By.XPATH, '//button[@class=\'DkEaL\']')))
-    review_bt.click()
-    return driver
-
-
-def get_review_summary(result_set):
-    rev_dict = {'Review_Rate': [],
-                'Review_Time': [],
-                'Review_Text': []}
-    for result in result_set:
-        review_rate = result.find('span', class_='kvMYJc')["aria-label"]
-        review_time = convert_timestring(result.find('span', class_='rsqaWe').text)
-        review_text = convert_emojis(result.find('span', class_='wiI7pd').text)
-
-        rev_dict['Review_Rate'].append(review_rate)
-        rev_dict['Review_Time'].append(review_time)
-        rev_dict['Review_Text'].append(review_text)
-
-    return pd.DataFrame(rev_dict)
-
-
-def page_parser(driver, name):
-    """ parse the page for reviews number and rating"""
-    wait = WebDriverWait(driver, 20)
-    # n reviews and rating
-    first_response = BeautifulSoup(driver.page_source, 'html.parser')
-    total_reviews_cnt = int(''.join(filter(str.isdigit, (first_response.find('button', class_='DkEaL')['aria-label']))))
-    print(f)
-    overall_rating = float(float_regex.findall(first_response.find('span', class_='ceNzKf')['aria-label'])[0])
-    print(f'Store Name: {name}, Total number of reviews: {total_reviews_cnt},Overall rating: {overall_rating} stars')
-    # Sort on Newest
-    menu_bt = wait.until(ec.element_to_be_clickable((By.XPATH, '//button[@data-value=\'Sort\']')))
-    menu_bt.click()
-    recent_rating_bt = wait.until(ec.visibility_of_element_located((By.XPATH, "//li[@data-index='1']")))
-    recent_rating_bt.click()
-    # scroll until you see all the results
-    scrollable_div = wait.until(ec.element_to_be_clickable((By.XPATH, '//div[@class=\'m6QErb DxyBCb kA9KIf dS8AEf\']')))
-
-    reviews = []
-    prev = -1
-    while len(reviews) != total_reviews_cnt:
-        if len(reviews) == prev:
-            break
-        prev = len(reviews)
-        for i in range(total_reviews_cnt // 10):
-            # searching for clicks
-            driver.execute_script('arguments[0].scrollTop = arguments[0].scrollHeight', scrollable_div)
-            time.sleep(0.1)
-            buttons = driver.find_elements(by=By.XPATH, value="//button[@class=\'w8nwRe kyuRq\']")
-            for button in buttons:
-                button.click()
-            time.sleep(0.1)
-        html_response = BeautifulSoup(driver.page_source, 'html.parser')
-        reviews = html_response.find_all('div', class_='jftiEf L6Bbsd fontBodyMedium')
-    return reviews
-
-
-def f(name, url):
-    chrome_options = webdriver.ChromeOptions()
-    chrome_options.add_argument('--no-sandbox')
-    chrome_options.add_argument('--headless')
-    chrome_options.add_argument('start-maximized')
-    driver = webdriver.Chrome(service=Service('tmp/chromedriver'), options=chrome_options)
-
-    raw_reviews = page_parser(driver=page_preload(driver, url=url), name=name)
-    get_review_summary(raw_reviews).to_csv(f'output/{name}.csv')
-
-
-if __name__ == '__main__':
-    start = datetime.datetime.now()
-    l_stores = len(stores)
-    print(f"Total Numer of stores {l_stores}")
-    with Pool(10) as p:
-        p.starmap(f, [tuple([name, url]) for name, url in stores.items()])
-    print("Total Time:", datetime.datetime.now() - start)
+for root, dirs, files in os.walk("./output", topdown=False):
+    target = set(stores.keys())
+    got = target.difference([file.split(".")[0] for file in files])
+    print(got)
