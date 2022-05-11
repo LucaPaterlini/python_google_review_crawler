@@ -1,7 +1,7 @@
 import datetime
 import time
 import re
-from multiprocessing import Process
+from multiprocessing import Process, Pool
 
 import pandas as pd
 import selenium.common.exceptions
@@ -133,10 +133,8 @@ def f(name, url):
 
 if __name__ == '__main__':
     start = datetime.datetime.now()
-    p = [Process(target=f, args=(k, v)) for k, v in stores.items()]
     l_stores = len(stores)
     print(f"Total Numer of stores {l_stores}")
-    for x in range(0, l_stores, 5):
-        for j in range(x, min(l_stores, x + 5)): p[j].start()
-        for j in range(x, min(l_stores, x + 5)): p[j].join()
+    with Pool(5) as p:
+        p.starmap(f, [tuple([name, url]) for name, url in stores.items()])
     print("Total Time:", datetime.datetime.now() - start)
